@@ -1,3 +1,24 @@
+Forked from [JJJYY/import-weapp-component](https://github.com/JJJYY/import-weapp-component)
+
+修改以适用最新版本 [F-loat/mpvue-quickstart](https://github.com/F-loat/mpvue-quickstart) (app.json)
+
+```js
+plugins: [
+    new ImportComponent({
+      src: path.resolve(__dirname, '../src'), // 引用组件或原生页面的目录
+      usingComponents: path.resolve(__dirname, '../src/app.json'), // mpvue-entry 配置路径
+      forceCopy:[
+		path.resolve(__dirname, '../vant-weapp/wxs'),
+		path.resolve(__dirname, '../vant-weapp/common/index.wxss')
+      ]
+    })
+  ]
+```
+
+
+
+----
+
 Forked from [webpack-contrib/copy-webpack-plugin](https://github.com/webpack-contrib/copy-webpack-plugin)
 
 Author: Len Boyette

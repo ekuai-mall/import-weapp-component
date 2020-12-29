@@ -1,33 +1,26 @@
 import globby from 'globby';
-import path, { isAbsolute, resolve, join, relative } from 'path';
+import path, {isAbsolute, resolve, join, relative} from 'path';
 import fs from 'fs';
 import fetchModules from './fetchModules';
 
 let globalCompilation; // 主要用于`errors.push`
-
 const dependencies = new Set();
-
-function isPlainObject (_any) {
-    return Object.prototype.toString.call(_any) === '[object Object]';
-}
-
 const jsonRE = /\/.+\.json$/;
-function getPathParse (filePath) {
+
+function getPathParse(filePath) {
     return path.parse(filePath);
 }
-function getFileDir (path) { // must be json file
+
+function getFileDir(path) { // must be json file
     return getPathParse(path).dir;
 }
-// function getFileName (path) {
-//     return getPathParse(path).name;
-// }
 
-function pushError (err) {
+function pushError(err) {
     err = typeof err === 'string' ? new Error(err) : err;
     globalCompilation.errors.push(err);
 }
 
-function getUsingComponents (content, filePath) {
+function getUsingComponents(content, filePath) {
     try {
         let json = JSON.parse(content);
         return json['usingComponents'] || {}; // 防止返回undefined
@@ -37,16 +30,16 @@ function getUsingComponents (content, filePath) {
     }
 }
 
-function addComponents (content, components, parent) {
+function addComponents(content, components, parent) {
     components.push(...Object.keys(content).map(name => parent ? path.join(parent, content[name]) : content[name]));
 }
 
-function addComponentsFromJson (json, components, parent, filePath) {
+function addComponentsFromJson(json, components, parent, filePath) {
     const content = getUsingComponents(json, filePath);
     addComponents(content, components, parent);
 }
 
-function addComponentsFromPath (path, components, parent) {
+function addComponentsFromPath(path, components, parent) {
     if (fs.existsSync(path)) {
         let json = fs.readFileSync(path, 'utf8');
         addComponentsFromJson(json, components, parent, path);
@@ -55,16 +48,23 @@ function addComponentsFromPath (path, components, parent) {
     }
 }
 
-function getNativePattern (from, to) {
+function getNativePattern(from, to) {
     return {
         from: getFileDir(from),
         to: getFileDir(to),
-        ignore: [ '**/*.!(js|json|wxss|wxml)' ]
+        ignore: ['**/*.!(js|json|wxss|wxml)']
     };
 }
 
-function generatorPattern (from, to, components, parent) {
-    const { dir: fromDir, name: fromName } = getPathParse(from);
+function getFilePattern(from, to) {
+    return {
+        from,
+        to
+    };
+}
+
+function generatorPattern(from, to, components, parent) {
+    const {dir: fromDir, name: fromName} = getPathParse(from);
     const filePath = `${from}.js`;
 
     // 为了与小程序保持一致，仅判断`from.js`是否存在
@@ -78,7 +78,7 @@ function generatorPattern (from, to, components, parent) {
     }
 }
 
-function getOutputDir (file, path) {
+function getOutputDir(file, path) {
     const fileDir = getFileDir(file);
     const to = isAbsolute(path)
         ? path
@@ -87,12 +87,12 @@ function getOutputDir (file, path) {
     return to.slice(1);
 }
 
-function getEntry (name, code, context) {
+function getEntry(name, code, context) {
     return {
         context,
         assets: {
             [name]: {
-                source () {
+                source() {
                     return code;
                 }
             }
@@ -100,9 +100,9 @@ function getEntry (name, code, context) {
     };
 }
 
-function path2Entry (_path, context) {
+function path2Entry(_path, context) {
     const parse = getPathParse(_path);
-    const code = fs.readFileSync(_path, { encoding: 'utf8' });
+    const code = fs.readFileSync(_path, {encoding: 'utf8'});
 
     if (context) {
         _path = relative(context, _path);
@@ -110,9 +110,9 @@ function path2Entry (_path, context) {
     return getEntry(_path, code, parse.dir);
 }
 
-function getAllExtFileFromSrc (src, ext, getEntry) {
+function getAllExtFileFromSrc(src, ext, getEntry) {
     if (!Array.isArray(src)) {
-        src = [ src ];
+        src = [src];
     }
     return src.reduce((result, dir) => {
         let res = [];
@@ -129,39 +129,15 @@ function getAllExtFileFromSrc (src, ext, getEntry) {
                 pushError(`includes: "${dir}", is not a effective path.`);
             }
         }
-
         return result.concat(res);
     }, []);
 }
 
-// 从 object 或 array 中获取所有 usingComponent
-// allUsingComponents 可能为 string 或 object
-function getAllUsing (allUsingComponents, entries = [], context = '') {
-    if (Array.isArray(allUsingComponents)) {
-        allUsingComponents.forEach(item => getAllUsing(item, entries, context));
-    } else if (isPlainObject(allUsingComponents)) {
-        Object.keys(allUsingComponents).forEach(key => {
-            const value = allUsingComponents[key];
-            if (key === 'usingComponents') {
-                const file = context + '.json';
-                const parse = getPathParse(file);
-                entries.push(getEntry(file, JSON.stringify({ usingComponents: value }), parse.dir));
-            } else if (key === 'path') {
-                context = value;
-            } else {
-                getAllUsing(value, entries, context);
-            }
-        });
-    }
-
-    return entries;
-}
-
-function hadExist (patterns, pattern) {
+function hadExist(patterns, pattern) {
     return patterns.some(p => p.from === pattern.from && p.to === pattern.to);
 }
 
-export default function extractComponent (compilation, componentConfig = {}) {
+export default function extractComponent(compilation, componentConfig = {}) {
     dependencies.clear();
 
     globalCompilation = compilation;
@@ -170,47 +146,34 @@ export default function extractComponent (compilation, componentConfig = {}) {
     let entries = compilation.entries ? compilation.entries.slice(0) : [];
 
     let projectContext = (compilation.options || {}).context || '';
-    const { src, native, usingComponents } = componentConfig;
+    const {src, usingComponents, forceCopy} = componentConfig;
 
     // 增加对最新版本 mpvue 的支持
     if (src) {
         entries = entries.concat(getAllExtFileFromSrc(src, 'json', true));
     }
 
-    if (usingComponents) {
-        try {
-            const allUsingComponents = require(usingComponents);
-            entries = entries.concat(getAllUsing(allUsingComponents));
-            // 修改 projectContext
-            projectContext = getPathParse(usingComponents).dir;
-        } catch (e) {
-            pushError(e);
-        }
+    for (let i = 0; i < forceCopy.length; i++) {
+        const path = forceCopy[i];
+        const to = relative(projectContext, path);
+        dependencies.add(path);
+        patterns.push(getFilePattern(path, to));
     }
 
-    if (native && projectContext) {
-        const nativePages = getAllExtFileFromSrc(src, 'wxml');
-        nativePages.forEach(dir => {
-            const parse = getPathParse(dir);
-            const filePath = `${parse.dir}/${parse.name}.js`;
-            const jsonPath = `${parse.dir}/${parse.name}.json`;
-            if (fs.existsSync(filePath)) {
-                if (fs.existsSync(jsonPath)) {
-                    let json = fs.readFileSync(jsonPath, { encoding: 'utf8' });
-                    if (json) {
-                        json = JSON.parse(json);
-                        // 剔除组件
-                        if (json.component) {
-                            return;
-                        }
-                    }
+    if (usingComponents) {
+        let components = [];
+        addComponentsFromPath(usingComponents, components, projectContext);
+        for (let j = 0; j < components.length; j++) {
+            const path = components[j];
+            if (path) {
+                const from = path;
+                const to = relative(projectContext, path);
+                const pattern = generatorPattern(from, to, components, components[j]);
+                if (pattern && !hadExist(patterns, pattern)) {
+                    patterns.push(pattern);
                 }
-                dependencies.add(filePath);
-                const to = relative(src, dir);
-
-                patterns.push(getNativePattern(dir, to));
             }
-        });
+        }
     }
 
     if (entries.length && projectContext) {
@@ -236,14 +199,14 @@ export default function extractComponent (compilation, componentConfig = {}) {
 
                     const pattern = generatorPattern(from, to, components, components[j]);
                     // 重复去重
-                    if (pattern && !hadExist(patterns, pattern)) patterns.push(pattern);
+                    if (pattern && !hadExist(patterns, pattern)) {
+                        patterns.push(pattern);
+                    }
                 }
             }
         }
-
         // 根据 dependencies 列表得到需要复制的依赖文件
         patterns = patterns.concat(fetchModules(dependencies, projectContext));
     }
-
     return patterns;
 }
