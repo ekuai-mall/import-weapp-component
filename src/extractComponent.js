@@ -1,7 +1,7 @@
 import globby from 'globby';
 import path, {isAbsolute, resolve, join, relative} from 'path';
 import fs from 'fs';
-import fetchModules from './fetchModules';
+// import fetchModules from './fetchModules';
 
 let globalCompilation; // 主要用于`errors.push`
 const dependencies = new Set();
@@ -52,14 +52,15 @@ function getNativePattern(from, to) {
     return {
         from: getFileDir(from),
         to: getFileDir(to),
-        ignore: ['**/*.!(js|json|wxss|wxml)']
+        ignore: ['**/*.!(js|json|wxss|wxs|wxml)']
     };
 }
 
 function getFilePattern(from, to) {
     return {
         from,
-        to
+        to,
+        ignore: ['**/*.!(js|json|wxss|wxs|wxml)']
     };
 }
 
@@ -206,7 +207,7 @@ export default function extractComponent(compilation, componentConfig = {}) {
             }
         }
         // 根据 dependencies 列表得到需要复制的依赖文件
-        patterns = patterns.concat(fetchModules(dependencies, projectContext));
+        // patterns = patterns.concat(fetchModules(dependencies, projectContext));
     }
     return patterns;
 }
